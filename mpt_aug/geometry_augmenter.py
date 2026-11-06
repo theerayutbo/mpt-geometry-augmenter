@@ -156,7 +156,10 @@ class SamplerConfig:
             "fuse": 1.0,
         }
     )
-    maxh: float = 0.3
+    maxh: float = 0.3  # upper bound on object maxh
+    maxh_min: float = 0.15  # lower bound when adapting maxh to thin bodies
+    maxh_factor: float = 2.0  # sampler's copy of the gate floors (hints only)
+    delta_factor: float = 3.0
     bl_layers: int = 2
     bl_cap: float = 0.25
 
@@ -245,7 +248,21 @@ def _local_half(family: str, H: Sequence[float], a: int, offsets: dict[int, floa
     return H[a]
 
 
-def _sample_op(kind: str, family: str, H: Sequence[float], rng: np.random.Generator) -> dict[str, Any]:
+def _sample_op(
+    kind: str,
+    family: str,
+    H: Sequence[float],
+    rng: np.random.Generator,
+    t_min: float,
+    t_mesh: float,
+) -> dict[str, Any] | None:
+    """Draw one op's parameters inside the range the gate can accept.
+
+    ``t_min``/``t_mesh`` are the gate's feature floors (see :func:`min_feature_report`);
+    sampling within them keeps the gate from silently biasing the dataset against
+    holes/notches. Returns ``None`` if the body is too small for this op. The gate
+    remains the authority (curved-body sections, op interactions, OCC failures).
+    """
     if kind == "corner_cut":
         w = rng.uniform(0.3, 1.0, 3) * rng.choice([-1.0, 1.0], 3)
         n = w / np.linalg.norm(w)
@@ -257,17 +274,31 @@ def _sample_op(kind: str, family: str, H: Sequence[float], rng: np.random.Genera
             "offset": (1.0 - frac) * _support(family, H, n),
         }
     if kind == "through_hole":
-        a = int(rng.integers(3))
+        # Prefer drilling along the thin direction (washer-like), weight ~ min perp extent.
+        perp_min = np.array([min(H[k] for k in range(3) if k != a) for a in range(3)])
+        r_hi = perp_min - t_min
+        ok = r_hi >= 0.5 * t_mesh
+        if not ok.any():
+            return None
+        wts = np.where(ok, perp_min, 0.0)
+        a = int(rng.choice(3, p=wts / wts.sum()))
         i, j = [k for k in range(3) if k != a]
-        r = float(rng.uniform(0.15, 0.45)) * min(H[i], H[j])
-        off = [float(rng.choice([-1, 1]) * rng.uniform(0.0, 0.5) * (H[k] - r)) for k in (i, j)]
+        r_lo = 0.5 * t_mesh
+        r = r_lo + float(rng.uniform(0.0, 0.7)) * (r_hi[a] - r_lo)
+        off = [float(rng.choice([-1, 1]) * rng.uniform(0.0, 0.5) * max(H[k] - r - t_min, 0.0)) for k in (i, j)]
         return {"kind": kind, "axis": "xyz"[a], "radius": r, "offset": off}
     if kind == "notch":
-        a, b = (int(x) for x in rng.permutation(3)[:2])
-        c = 3 - a - b
-        depth = float(rng.uniform(0.1, 0.4)) * 2 * H[a]
-        width = float(rng.uniform(0.1, 0.3)) * 2 * H[c]
-        pos = float(rng.choice([-1, 1]) * rng.uniform(0.0, 0.5) * (H[c] - 0.5 * width))
+        a = int(rng.integers(3))
+        b, c = sorted((k for k in range(3) if k != a), key=lambda k: H[k])  # c = wider axis
+        depth_hi = min(0.4 * 2 * H[a], 2 * H[a] - t_min)
+        width_hi = min(0.3 * 2 * H[c], 2 * H[c] - 2 * t_min)
+        depth_lo, width_lo = 0.1 * 2 * H[a], t_mesh
+        if depth_hi < depth_lo or width_hi < width_lo:
+            return None
+        depth = float(rng.uniform(depth_lo, depth_hi))
+        width = float(rng.uniform(width_lo, width_hi))
+        slack = H[c] - 0.5 * width - t_min
+        pos = float(rng.choice([-1, 1]) * rng.uniform(0.0, 0.5) * slack)
         return {
             "kind": kind,
             "axis": "xyz"[a],
@@ -281,7 +312,10 @@ def _sample_op(kind: str, family: str, H: Sequence[float], rng: np.random.Genera
         a = int(rng.integers(3))
         b, c = [k for k in range(3) if k != a]
         prim = str(rng.choice(["cylinder", "box", "sphere"]))
-        size = float(rng.uniform(0.25, 0.5)) * min(H[b], H[c])
+        size_lo, size_hi = 0.5 * t_min, 0.5 * min(H[b], H[c])
+        if size_hi < size_lo:
+            return None
+        size = float(rng.uniform(max(size_lo, 0.25 * min(H[b], H[c])), size_hi)) if size_hi > size_lo else size_lo
         length = size if prim == "sphere" else float(rng.uniform(0.3, 0.8)) * max(H)
         # Penetrate deep enough that the stem's rim is inside a curved body.
         rim = min(_local_half(family, H, a, {b: size}), _local_half(family, H, a, {c: size}))
@@ -329,17 +363,31 @@ def spec_from_unit(
     n_ops = int(rng.choice(len(cfg.n_ops_probs), p=np.asarray(cfg.n_ops_probs) / sum(cfg.n_ops_probs)))
     kinds = [k for k in OPS if not (k == "aspect" and family == "sphere")]
     w = np.array([cfg.op_weights.get(k, 0.0) for k in kinds], dtype=float)
-    chosen = list(rng.choice(kinds, size=min(n_ops, int((w > 0).sum())), replace=False, p=w / w.sum()))
-    chosen.sort(key=_OP_ORDER.__getitem__)
+    # Random priority order over all kinds; take the first n_ops that are feasible.
+    order = [str(k) for k in rng.choice(kinds, size=int((w > 0).sum()), replace=False, p=w / w.sum())]
+
+    delta_units = math.sqrt(2.0 / (mur * nu_max))  # skin depth at omega_max / alpha
+    if "aspect" in order[:n_ops]:
+        f = [float(x) for x in np.exp(rng.uniform(-0.2, 0.2, 3))]
+        params = _apply_aspect(family, params, f)
+    H = half_extents(family, params)
+    # maxh adapts down so the thinnest base dimension spans >= maxh_factor elements.
+    maxh = max(cfg.maxh_min, min(cfg.maxh, 2 * min(H) / cfg.maxh_factor))
+    t_mesh = cfg.maxh_factor * maxh
+    t_min = max(t_mesh, cfg.delta_factor * delta_units)
 
     ops: list[dict[str, Any]] = []
-    for kind in chosen:
+    for kind in order:
+        if len(ops) >= n_ops:
+            break
         if kind == "aspect":
-            f = [float(x) for x in np.exp(rng.uniform(-0.2, 0.2, 3))]
-            params = _apply_aspect(family, params, f)
-            ops.append({"kind": "aspect", "factors": f})
-        else:
-            ops.append(_sample_op(kind, family, half_extents(family, params), rng))
+            if "aspect" in order[:n_ops]:
+                ops.append({"kind": "aspect", "factors": f})
+            continue
+        op = _sample_op(kind, family, H, rng, t_min, t_mesh)
+        if op is not None:
+            ops.append(op)
+    ops.sort(key=lambda o: _OP_ORDER[o["kind"]])
 
     return SampleSpec(
         sample_id=_sample_id(seed),
@@ -351,7 +399,7 @@ def spec_from_unit(
         sigma=float(sigma),
         alpha=float(alpha),
         max_frequency=float(cfg.max_frequency),
-        maxh=cfg.maxh,
+        maxh=float(maxh),
         bl_layers=cfg.bl_layers,
         bl_cap=cfg.bl_cap,
         unit_point=[float(x) for x in u],
