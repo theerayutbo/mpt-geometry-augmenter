@@ -54,15 +54,28 @@ pip install -r requirements.txt        # ngsolve/netgen 6.2.2608, numpy==2.3.3, 
 pip install -e .                        # optional; or run from the repo root
 ```
 
-- **numpy must stay at 2.3.3.** numpy 2.5 breaks the MPT-Calculator solver.
-- **Netgen 6.2.2608 .vol files** make
-  `MPT-Calculator/Functions/Helper_Functions/count_prismatic_elements.py` loop
-  forever. The old loop waits for a `# surfid` comment that newer Netgen no
-  longer writes. Patch it locally to read exactly the element count declared after
-  `volumeelements`, counting lines with 4 or 6 nodes, and to stop at EOF. The
-  augmenter itself never modifies the MPT-Calculator checkout. It only adds
-  `OCC_Geometry/aug_*.py`, and MPT-Calculator writes its own `GeoFiles/`,
-  `VolFiles/` and `Results/`.
+### MPT-Calculator compatibility patches
+
+Upstream MPT-Calculator (as of Nov 2025, commit `ddb99c2`) needs two small fixes
+to run on current pip packages. Apply them once to your checkout:
+
+```bash
+patches/apply.sh /path/to/MPT-Calculator
+```
+
+| patch | problem | without it |
+|---|---|---|
+| `0001-count-prismatic-elements-netgen-6.2.2608` | Netgen ≥ 6.2.2608 no longer writes the `# surfid` line that `count_prismatic_elements.py` uses as a loop terminator | mesh step hangs forever |
+| `0002-numpy-2.5-scalar-assignment` | NumPy ≥ 2.5 refuses `R[i, j] = <(1,1) array>` in the tensor post-processing | `ValueError: setting an array element with a sequence` |
+
+With both applied the sphere benchmark matches the exact solution to 0.16 % on
+NumPy 2.5.4, so the `numpy==2.3.3` pin in `requirements.txt` is only there for
+unpatched checkouts. Both fixes have been submitted upstream; once merged, delete
+`patches/` and the pin.
+
+Beyond these patches the augmenter never modifies the MPT-Calculator checkout. It
+only adds `OCC_Geometry/aug_*.py`, and MPT-Calculator writes its own `GeoFiles/`,
+`VolFiles/` and `Results/`.
 
 ## Usage
 

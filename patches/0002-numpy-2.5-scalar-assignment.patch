@@ -1,0 +1,48 @@
+diff --git a/Functions/Core_MPT/Mat_Method_Calc_Real_Part.py b/Functions/Core_MPT/Mat_Method_Calc_Real_Part.py
+index ae30b3e..681ff91 100644
+--- a/Functions/Core_MPT/Mat_Method_Calc_Real_Part.py
++++ b/Functions/Core_MPT/Mat_Method_Calc_Real_Part.py
+@@ -144,7 +144,7 @@ def Mat_Method_Calc_Real_Part(bilinear_bonus_int_order: int,
+                     Qij = locals()[f'Q{i+1}{j+1}']
+ 
+                     A = np.conj(gi[None, :]) @ Qij @ (gj)[:, None]
+-                    R[i, j] = (A * (-alpha ** 3) / 4).real
++                    R[i, j] = (A * (-alpha ** 3) / 4).real.item()  # .item(): NumPy >= 2.5 rejects assigning a (1,1) array to a scalar cell
+             #print(A,np.shape(A),alpha,np.shape(alpha))
+ 
+         # If we don't reduce the size of the matrix and we still want to save memory, then we can use K.Apply here as well.
+@@ -161,7 +161,7 @@ def Mat_Method_Calc_Real_Part(bilinear_bonus_int_order: int,
+                         K.Apply(read_vec, write_vec)
+                         
+                     A = np.conj(gi[None,:]) @ write_vec.FV().NumPy()
+-                    R[i, j] = (A * (-alpha ** 3) / 4).real
++                    R[i, j] = (A * (-alpha ** 3) / 4).real.item()  # .item(): NumPy >= 2.5 rejects assigning a (1,1) array to a scalar cell
+                     
+         
+         R += np.transpose(R - np.diag(np.diag(R))).real
+diff --git a/Functions/Core_MPT/Theta1_Lower_Sweep.py b/Functions/Core_MPT/Theta1_Lower_Sweep.py
+index 20e7049..33fb881 100755
+--- a/Functions/Core_MPT/Theta1_Lower_Sweep.py
++++ b/Functions/Core_MPT/Theta1_Lower_Sweep.py
+@@ -311,7 +311,7 @@ def Theta1_Lower_Sweep(Array, mesh, fes, fes2, Sols, u1Truncated, u2Truncated, u
+ 
+                         # A = np.conj(gi[None, :]) @ Q @ (gj)[:, None]
+                         A = np.conj(wi[None, :]) @ Q @ (wj)[:, None]
+-                        R[i, j] = (A * (-alpha ** 3) / 4).real
++                        R[i, j] = (A * (-alpha ** 3) / 4).real.item()  # .item(): NumPy >= 2.5 rejects assigning a (1,1) array to a scalar cell
+ 
+                         c2 = wi[None, :] @ A_mat_t0
+                         c3 = (t0i)[None, :] @ A_mat @ np.conj(wj)[:, None]
+diff --git a/Functions/Core_MPT/Theta1_Lower_Sweep_Mat_Method.py b/Functions/Core_MPT/Theta1_Lower_Sweep_Mat_Method.py
+index 5d99932..2ca2ffd 100755
+--- a/Functions/Core_MPT/Theta1_Lower_Sweep_Mat_Method.py
++++ b/Functions/Core_MPT/Theta1_Lower_Sweep_Mat_Method.py
+@@ -112,7 +112,7 @@ def Theta1_Lower_Sweep_Mat_Method(Array, Q_array, c1_array, c5_array, c7, c8_arr
+ 
+                 # Calc Real Part:
+                 A = np.conj(gi[None, :]) @ Q @ (gj)[:, None]
+-                R[i, j] = (A * (-alpha ** 3) / 4).real
++                R[i, j] = (A * (-alpha ** 3) / 4).real.item()  # .item(): NumPy >= 2.5 rejects assigning a (1,1) array to a scalar cell
+ 
+                 # Calc Imag Part:
+                 p1 = np.real(np.conj(gi) @ T @ gj)
