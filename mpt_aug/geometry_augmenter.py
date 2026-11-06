@@ -42,6 +42,7 @@ __all__ = [
     "GateConfig",
     "GateResult",
     "skin_depth",
+    "auto_bl_layers",
     "nu_of",
     "spec_from_unit",
     "sample_spec",
@@ -160,8 +161,12 @@ class SamplerConfig:
     maxh_min: float = 0.15  # lower bound when adapting maxh to thin bodies
     maxh_factor: float = 2.0  # sampler's copy of the gate floors (hints only)
     delta_factor: float = 3.0
-    bl_layers: int = 2
+    #: Prism layers. None = auto: enough doubling layers that the stack spans from
+    #: delta(omega_max) up to ``bl_cover*maxh`` (see :func:`auto_bl_layers`).
+    bl_layers: int | None = None
     bl_cap: float = 0.25
+    bl_cover: float = 0.5
+    bl_max_layers: int = 6
 
 
 @dataclass
@@ -189,6 +194,23 @@ class GateResult:
 
 
 # --------------------------------------------------------------------------- sampling
+def auto_bl_layers(delta_units: float, maxh: float, bl_cap: float = 0.25, cover: float = 0.5,
+                   max_layers: int = 6) -> int:
+    """Number of 2x-growing prism layers so the stack covers delta..cover*maxh.
+
+    A stack sized only for delta(omega_max) leaves a gap: at mid-band frequencies
+    delta is thicker than the stack but thinner than the tets, and nothing resolves
+    it (measured: ~5 % MPT error mid-band on a sphere with 2 layers vs <1 % with a
+    covering stack). The stack total is kept <= 0.9*maxh so stacks from opposite
+    faces cannot collide in any wall that passes the gate (t_min >= 2*maxh).
+    """
+    tau = min(delta_units, bl_cap * maxh)
+    n = 1
+    while n < max_layers and tau * (2 ** n - 1) < cover * maxh and tau * (2 ** (n + 1) - 1) <= 0.9 * maxh:
+        n += 1
+    return n
+
+
 def _lerp(lo: float, hi: float, u: float) -> float:
     return lo + (hi - lo) * float(u)
 
@@ -400,7 +422,8 @@ def spec_from_unit(
         alpha=float(alpha),
         max_frequency=float(cfg.max_frequency),
         maxh=float(maxh),
-        bl_layers=cfg.bl_layers,
+        bl_layers=cfg.bl_layers if cfg.bl_layers is not None
+        else auto_bl_layers(delta_units, maxh, cfg.bl_cap, cfg.bl_cover, cfg.bl_max_layers),
         bl_cap=cfg.bl_cap,
         unit_point=[float(x) for x in u],
     )

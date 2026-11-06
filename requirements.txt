@@ -1,0 +1,14 @@
+# Solver stack (must match the MPT-Calculator environment)
+ngsolve==6.2.2608          # pulls netgen-mesher 6.2.2608
+numpy==2.3.3               # numpy 2.5 breaks the MPT-Calculator solver; keep pinned
+scipy>=1.11                # scipy.stats.qmc (Sobol / LHS)
+sympy
+tqdm
+dill
+multiprocessing_on_dill
+matplotlib
+# Dataset I/O
+pandas>=2.0
+pyarrow>=14                # optional: without it the table is written as CSV
+# Tests
+pytest>=8
