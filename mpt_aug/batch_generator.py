@@ -167,6 +167,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--maxh-min", type=float, default=0.15, help="floor when maxh adapts to thin bodies")
     p.add_argument("--bl-layers", default="auto",
                    help="prism layers (int) or 'auto' (stack spans delta(omega_max)..maxh/2; recommended)")
+    p.add_argument("--grading", type=float, default=0.3,
+                   help="netgen mesh grading (0.3 default; 0.5 roughly halves the air-dominated element count)")
     p.add_argument("--max-elements", type=int, default=60_000)
     p.add_argument("--delta-factor", type=float, default=3.0, help="t_min >= delta_factor * skin depth")
     p.add_argument("--max-attempts", type=int, default=50, help="gate attempts per slot before giving up")
@@ -195,6 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         maxh_min=args.maxh_min,
         delta_factor=args.delta_factor,
         bl_layers=None if str(args.bl_layers) == "auto" else int(args.bl_layers),
+        mesh_grading=args.grading,
     )
     gcfg = GateConfig(max_elements=args.max_elements, delta_factor=args.delta_factor)
     pool = max(64, args.n * args.max_attempts)

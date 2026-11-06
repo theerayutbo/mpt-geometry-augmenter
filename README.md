@@ -168,9 +168,11 @@ After meshing, it checks the element cap (60k by default) and that prisms exist.
   - `auto` layers, 13 POD points: 0.26 %
 - **POD with 7 snapshots** is cheap but costs about 1 % accuracy between snapshots.
   Use ≥ 13 for production data.
-- **The air box dominates the element count** (~11k of ~13–23k at maxh 0.3), so
-  making the object maxh coarser barely reduces cost but rejects holes and notches.
-  maxh adapts down to 0.15 for thin bodies.
+- **The air box dominates the element count.** For example, 18k of 21k elements
+  at maxh 0.3. Coarsening the object maxh barely reduces cost and rejects holes and
+  notches. maxh adapts down to 0.15 for thin bodies. `--grading 0.5` roughly halves
+  the element count (20k → 10k on a sample), but its effect on MPT accuracy has
+  **not been verified** yet. Check it against the sphere test before relying on it.
 - **Meshing runs twice per accepted sample:** once in-process for the gate, and
   once inside MPT-Calculator from the OCC file. This takes a few seconds per sample.
 - **Single conducting material per object** for now; MPT-Calculator itself

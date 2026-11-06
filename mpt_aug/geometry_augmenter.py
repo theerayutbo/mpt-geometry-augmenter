@@ -99,6 +99,7 @@ class SampleSpec:
     air_half: float = 1000.0
     bl_layers: int = 2
     bl_cap: float = 0.25
+    mesh_grading: float = 0.3
     material_name: str = "metal"
     unit_point: list[float] | None = None
 
@@ -167,6 +168,7 @@ class SamplerConfig:
     bl_cap: float = 0.25
     bl_cover: float = 0.5
     bl_max_layers: int = 6
+    mesh_grading: float = 0.3  # netgen default; larger = faster air coarsening, fewer elements
 
 
 @dataclass
@@ -425,6 +427,7 @@ def spec_from_unit(
         bl_layers=cfg.bl_layers if cfg.bl_layers is not None
         else auto_bl_layers(delta_units, maxh, cfg.bl_cap, cfg.bl_cover, cfg.bl_max_layers),
         bl_cap=cfg.bl_cap,
+        mesh_grading=cfg.mesh_grading,
         unit_point=[float(x) for x in u],
     )
 

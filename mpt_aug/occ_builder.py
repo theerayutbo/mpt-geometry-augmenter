@@ -211,7 +211,13 @@ def mesh_spec(spec, vol_path=None):
                 disable_curving=False,
             )
         ]
-    nmesh = geo.GenerateMesh(boundary_layers=layers) if layers else geo.GenerateMesh()
+    # grading: netgen's mesh-size growth rate (0.3 = netgen default). The air box
+    # dominates the element count, so this is the main cost knob.
+    grading = spec.get("mesh_grading", 0.3)
+    if layers:
+        nmesh = geo.GenerateMesh(grading=grading, boundary_layers=layers)
+    else:
+        nmesh = geo.GenerateMesh(grading=grading)
     for i in range(1, nmesh.GetNDomains() + 1):
         if nmesh.GetMaterial(i) == "default":
             nmesh.SetMaterial(i, "air")
