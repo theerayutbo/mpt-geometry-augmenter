@@ -70,7 +70,7 @@ patches/apply.sh /path/to/MPT-Calculator
 
 With both applied the sphere benchmark matches the exact solution to 0.16 % on
 NumPy 2.5.4, so the `numpy==2.3.3` pin in `requirements.txt` is only there for
-unpatched checkouts. Both fixes have been submitted upstream; once merged, delete
+unpatched checkouts. Both fixes are proposed upstream in [MPT-Calculator#15](https://github.com/MPT-Calculator/MPT-Calculator/pull/15); once merged, delete
 `patches/` and the pin.
 
 Beyond these patches the augmenter never modifies the MPT-Calculator checkout. It

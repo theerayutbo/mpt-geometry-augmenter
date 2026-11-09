@@ -10,7 +10,7 @@
 #         (1,1) array is assigned to R[i, j]; add .item(). Lets you drop the
 #         numpy==2.3.3 pin.
 #
-# Both have been submitted upstream. Once they are merged, this directory can be
+# Both are proposed upstream: https://github.com/MPT-Calculator/MPT-Calculator/pull/15
 # deleted and the pin in requirements.txt removed.
 #
 # Safe to re-run: already-applied patches are detected and skipped.
